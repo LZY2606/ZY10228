@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>粒级混合谱</title>
+<style>
+  :root{--bd:#d7dde5;--bg:#f5f7fa;--pri:#2b6cb0;--ok:#2f855a;--warn:#b7791f;--err:#c53030;}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,sans-serif;background:var(--bg);color:#1a202c}
+  header{background:linear-gradient(90deg,#1a365d,#2b6cb0);color:#fff;padding:14px 22px}
+  header h1{margin:0;font-size:20px}
+  header .sub{font-size:12px;opacity:.85;margin-top:3px}
+  .wrap{max-width:1280px;margin:0 auto;padding:18px}
+  .grid{display:grid;grid-template-columns:300px 1fr;gap:16px}
+  .card{background:#fff;border:1px solid var(--bd);border-radius:8px;padding:14px;margin-bottom:16px}
+  .card h2{font-size:15px;margin:0 0 10px;border-left:4px solid var(--pri);padding-left:8px}
+  label{font-size:12px;color:#4a5568;display:block;margin:8px 0 3px}
+  select,input,textarea{width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:5px;font-size:13px;font-family:inherit}
+  textarea{height:90px;font-family:ui-monospace,Menlo,monospace}
+  button{background:var(--pri);color:#fff;border:0;border-radius:5px;padding:7px 12px;font-size:13px;cursor:pointer;margin:4px 4px 0 0}
+  button.ghost{background:#edf2f7;color:#2d3748}
+  button.danger{background:var(--err)}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  .muted{color:#718096;font-size:12px}
+  .tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;margin-right:6px}
+  .tag.ok{background:#c6f6d5;color:var(--ok)}
+  .tag.warn{background:#fefcbf;color:var(--warn)}
+  .tag.err{background:#fed7d7;color:var(--err)}
+  table{border-collapse:collapse;width:100%;font-size:12px}
+  th,td{border:1px solid var(--bd);padding:4px 7px;text-align:right}
+  th:first-child,td:first-child{text-align:left}
+  canvas{width:100%;height:230px;background:#fbfcfe;border:1px solid var(--bd);border-radius:6px}
+  .kv{font-size:12px;display:grid;grid-template-columns:auto 1fr;gap:2px 10px}
+  .kv b{color:#2d3748}
+  .cand{border:1px solid var(--bd);border-radius:6px;padding:8px;margin:6px 0;font-size:12px}
+  .cand.best{border-color:var(--pri);background:#ebf4ff}
+  .emlist label{display:flex;align-items:center;gap:6px;margin:3px 0}
+  .emlist input{width:auto}
+  .scroll{max-height:240px;overflow:auto}
+  details summary{cursor:pointer;font-size:13px;font-weight:600;margin:4px 0}
+  .pill{font-family:ui-monospace,Menlo,monospace}
+</style>
+</head>
+<body>
+<header>
+  <h1>粒级混合谱</h1>
+  <div class="sub">筛分质量 × 激光体积 → 共同对数粒径网格｜左闭右开｜总量守恒（不吞失量）｜多稀疏候选与可识别性诊断</div>
+</header>
+<div class="wrap">
+<div class="grid">
+  <div>
+    <div class="card">
+      <h2>求解假设（本次固定）</h2>
+      <label>样品</label><select id="sample"></select>
+      <label>共同网格</label><select id="grid"></select>
+      <label>目标口径</label>
+      <select id="basis"><option value="MASS">质量 mass</option><option value="VOLUME">体积 volume</option><option value="AREA">面积 area</option><option value="NUMBER">数量 number</option></select>
+      <label>密度模型</label>
+      <select id="densityModel">
+        <option value="uniform-density">均匀密度（同一密度）</option>
+        <option value="endmember-density">端元各自密度</option>
+      </select>
+      <label>均匀密度 g/cm³</label><input id="density" type="number" step="0.01" value="2.65"/>
+      <div class="row"><div style="flex:1"><label>折射率实部</label><input id="riReal" type="number" step="0.01" value="1.54"/></div>
+      <div style="flex:1"><label>虚部</label><input id="riImag" type="number" step="0.01" value="0.01"/></div></div>
+      <div class="emlist" style="margin-top:8px"><label style="font-weight:600">参与端元</label><div id="ems"></div></div>
+      <button onclick="solve()">求解 / 反演</button>
+      <button class="ghost" onclick="loadAll()">刷新</button>
+    </div>
+
+    <div class="card">
+      <h2>库与数据</h2>
+      <details><summary>新增端元（定义分布与协方差）</summary>
+        <label>名称</label><input id="em_name" placeholder="EM-D"/>
+        <label>口径</label><select id="em_basis"><option>MASS</option><option>VOLUME</option><option>AREA</option><option>NUMBER</option></select>
+        <label>分布值（逗号，按当前共同网格）</label><textarea id="em_vals"></textarea>
+        <label>逐箱方差（逗号，可选）</label><textarea id="em_var"></textarea>
+        <label>密度 / RI</label><div class="row"><input id="em_density" type="number" value="2.65" style="flex:1"/><input id="em_ri" type="number" value="1.54" style="flex:1"/></div>
+        <button onclick="addEndmember()">保存端元</button>
+      </details>
+      <details style="margin-top:8px"><summary>新增仪器观测（原始箱 左闭右开）</summary>
+        <label>样品名</label><input id="ob_sample" value="sample-1 河流沉积物"/>
+        <label>仪器 / 口径</label><div class="row"><input id="ob_inst" placeholder="sieve" style="flex:1"/>
+          <select id="ob_basis" style="flex:1"><option>MASS</option><option>VOLUME</option><option>AREA</option><option>NUMBER</option></select></div>
+        <label>箱：lo,hi,value 每行（最后一行 hi 即显式右端点）</label>
+        <textarea id="ob_bins" placeholder="63,90,1.2&#10;90,125,2.1"></textarea>
+        <button onclick="addObservation()">保存观测</button>
+      </details>
+    </div>
+
+    <div class="card">
+      <h2>运行记录 / 复核</h2>
+      <div class="row">
+        <button class="ghost" onclick="exp()">导出 JSON</button>
+        <button class="danger" onclick="resetFix()">重置为 fixture</button>
+      </div>
+      <label>导入导出文件（清空数据库并重算核对）</label>
+      <input type="file" id="importFile" accept="application/json"/>
+      <button onclick="reimport()">清空后导入复核</button>
+      <div id="importReport" class="muted" style="margin-top:6px"></div>
+      <div id="runs" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <h2>原始箱（左闭右开，最后一箱右端点显式）</h2>
+      <div id="rawTables" class="scroll row"></div>
+    </div>
+    <div class="card">
+      <h2>转换后共同网格分布与网格外失量</h2>
+      <canvas id="cProj"></canvas>
+      <div id="conserve" style="margin-top:8px"></div>
+    </div>
+    <div class="card">
+      <h2>反演：观测 vs 拟合、残差</h2>
+      <canvas id="cFit"></canvas>
+      <canvas id="cRes" style="margin-top:10px;height:120px"></canvas>
+    </div>
+    <div class="card">
+      <h2>端元比例 · 候选解簇 · 可识别性</h2>
+      <div id="ident"></div>
+      <div id="cands"></div>
+    </div>
+  </div>
+</div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

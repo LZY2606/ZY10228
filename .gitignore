@@ -34,3 +34,8 @@ coverage/
 .vite/
 .turbo/
 *.tsbuildinfo
+
+# --- 本项目运行期 SQLite 数据库（首启自动生成并播种 fixture）---
+data/*.db
+data/*.db-wal
+data/*.db-shm
