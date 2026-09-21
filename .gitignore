@@ -34,3 +34,9 @@ coverage/
 .vite/
 .turbo/
 *.tsbuildinfo
+
+# 本地服务运行期 SQLite
+data/
+*.db
+*.db-wal
+*.db-shm

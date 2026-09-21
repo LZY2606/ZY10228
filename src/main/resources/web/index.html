@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>粒级混合谱</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1f2933; --muted:#667; --line:#e2e6ea;
+          --blue:#2f6fb0; --red:#c0392b; --green:#2e8b57; --amber:#b8860b; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+         background:var(--bg); color:var(--ink); font-size:13px; }
+  header { background:#1f3a5f; color:#fff; padding:12px 20px; display:flex; align-items:baseline; gap:16px; }
+  header h1 { margin:0; font-size:18px; }
+  header .sub { color:#bcd; font-size:12px; }
+  main { padding:16px 20px; max-width:1280px; margin:0 auto; }
+  .grid { display:grid; grid-template-columns: 340px 1fr; gap:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:14px; margin-bottom:16px; }
+  .card h2 { margin:0 0 10px; font-size:14px; border-left:3px solid var(--blue); padding-left:8px; }
+  label { display:block; margin:6px 0 2px; color:var(--muted); font-size:12px; }
+  input,select,textarea { width:100%; padding:5px 7px; border:1px solid #c8ced4; border-radius:5px; font-size:12px; font-family:inherit; }
+  textarea { min-height:120px; font-family:ui-monospace,Menlo,monospace; }
+  button { background:var(--blue); color:#fff; border:0; border-radius:5px; padding:7px 14px; font-size:12px; cursor:pointer; margin:4px 4px 0 0; }
+  button.sec { background:#6b7a8d; } button.danger { background:var(--red); } button.ok { background:var(--green); }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th,td { border-bottom:1px solid var(--line); padding:4px 6px; text-align:right; }
+  th:first-child,td:first-child { text-align:left; }
+  .tag { display:inline-block; padding:1px 7px; border-radius:10px; font-size:11px; margin-right:4px; }
+  .tag.mass{background:#fde2dd;color:#922} .tag.volume{background:#dfeafd;color:#245b96}
+  .tag.number{background:#eee;color:#444} .tag.area{background:#e4f6e4;color:#266b2e}
+  .muted{color:var(--muted)} .warn{color:var(--amber); font-weight:600} .bad{color:var(--red); font-weight:600}
+  svg { width:100%; height:auto; display:block; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .pill { font-size:11px; padding:2px 8px; border:1px solid var(--line); border-radius:10px; background:#fafbfc; }
+  .candbar { height:16px; border-radius:3px; display:inline-block; vertical-align:middle; }
+  details summary { cursor:pointer; color:var(--muted); margin:4px 0; }
+  #toast { position:fixed; right:16px; bottom:16px; background:#223; color:#fff; padding:8px 14px;
+           border-radius:6px; font-size:12px; opacity:0; transition:opacity .3s; max-width:420px; }
+  code { background:#eef1f4; padding:0 4px; border-radius:3px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>粒级混合谱</h1>
+  <span class="sub">筛分质量 × 激光体积 → 共同对数粒径网格 → 端元组合反演（固定网格 / 折射率 / 密度）</span>
+</header>
+<main>
+<div class="grid">
+  <div>
+    <div class="card">
+      <h2>求解设置</h2>
+      <label>样品</label><select id="sample"></select>
+      <label>端元（可多选近相关组合）</label>
+      <select id="endmembers" multiple size="5"></select>
+      <div class="row2">
+        <div><label>网格 minD (μm)</label><input id="minD" value="0.5"></div>
+        <div><label>网格 maxD (μm)</label><input id="maxD" value="2000"></div>
+      </div>
+      <label>每十倍程箱数</label><input id="bpd" value="8">
+      <div class="row2">
+        <div><label>目标权重口径</label>
+          <select id="toBasis"><option value="MASS">质量 mass</option>
+          <option value="VOLUME">体积 volume</option><option value="AREA">面积 area</option>
+          <option value="NUMBER">数量 number</option></select></div>
+        <div><label>合并方式</label>
+          <select id="blend"><option value="MEAN">覆盖均值 MEAN</option>
+          <option value="SUM">叠加 SUM</option><option value="FIRST">首覆盖 FIRST</option></select></div>
+      </div>
+      <div class="row2">
+        <div><label>密度 ρ (g/cm³)</label><input id="density" value="2.65"></div>
+        <div><label>折射率 n</label><input id="ri" value="1.54"></div>
+      </div>
+      <div class="row2">
+        <div><label>相对σ（默认）</label><input id="relSigma" value="0.06"></div>
+        <div><label>相关长度(箱)</label><input id="corrLen" value="1"></div>
+      </div>
+      <div class="row2">
+        <div><label>最大子集规模</label><input id="subset" value="3"></div>
+        <div><label>候选上限</label><input id="maxCand" value="12"></div>
+      </div>
+      <button onclick="runSolve()">求解并保存运行记录</button>
+    </div>
+
+    <div class="card">
+      <h2>端元库 / 样品</h2>
+      <details open><summary>端元库（分布与协方差可定义）</summary><div id="emList"></div></details>
+      <details><summary>样品与原始箱</summary><div id="sampleList"></div></details>
+      <details><summary>新增端元（JSON）</summary>
+        <textarea id="emJson" placeholder='{"id":"E_X","name":"...","distribution":{"basis":"MASS","edges":[...],"values":[...],"instrument":"x"},"relSigma":[0.06],"corrLength":1}'></textarea>
+        <button class="sec" onclick="addEndmember()">新增/覆盖端元</button>
+      </details>
+      <details><summary>新增样品（JSON）</summary>
+        <textarea id="sJson" placeholder='{"id":"S_X","name":"...","instruments":[{"basis":"MASS","edges":[...],"values":[...],"instrument":"sieve"}]}'></textarea>
+        <button class="sec" onclick="addSample()">新增/覆盖样品</button>
+      </details>
+    </div>
+
+    <div class="card">
+      <h2>运行记录 / 复核</h2>
+      <div id="solveList"></div>
+      <button class="ok" onclick="exportBundle()">导出运行记录(JSON)</button>
+      <button class="sec" onclick="document.getElementById('impFile').click()">清空后导入复核</button>
+      <input type="file" id="impFile" accept=".json" style="display:none" onchange="importBundle(this)">
+      <button class="danger" onclick="resetDb()">重置为固定 fixture</button>
+      <p class="muted">导入会在单事务内清空并重建全部数据；随后可对任一记录点“重放”做确定性复核。</p>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <h2>原始箱（左闭右开，末箱右端点单独声明）</h2>
+      <div id="rawCharts"></div>
+    </div>
+    <div class="card">
+      <h2>转换后分布（共同对数网格）与拟合</h2>
+      <div id="assumptions" class="muted"></div>
+      <div id="convCharts"></div>
+      <div id="conservation"></div>
+    </div>
+    <div class="card">
+      <h2>端元比例：稀疏候选与解簇</h2>
+      <div id="diag"></div>
+      <div id="clusters"></div>
+      <div id="candidates"></div>
+    </div>
+    <div class="card">
+      <h2>残差</h2>
+      <div id="residual"></div>
+    </div>
+  </div>
+</div>
+</main>
+<div id="toast"></div>
+<script src="/web/app.js"></script>
+</body>
+</html>
